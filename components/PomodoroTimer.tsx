@@ -35,9 +35,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   const [isActive, setIsActive] = useState(false);
   const [totalFocusedSeconds, setTotalFocusedSeconds] = useState(0);
   const [showCatModal, setShowCatModal] = useState(false);
-  // ==================== FIX: 오디오 초기화 상태 추가 ====================
   const [isAudioInitialized, setIsAudioInitialized] = useState(false);
-  // =======================================================================
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -60,15 +58,17 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
       setMode(TimerMode.Focus);
       setTimeLeft(focusDuration);
     }
-    setIsActive(false); 
-  }, [mode, focusDuration, breakDuration]);
+    // ==================== FIX: 이 줄을 주석 처리하여 타이머가 멈추지 않게 합니다 ====================
+    // setIsActive(false); 
+    // =======================================================================================
+  }, [mode, focusDuration, breakDuration, setTotalFocusedSeconds]); // 의존성 배열 업데이트
 
   useEffect(() => {
     if (isActive) {
       targetTimeRef.current = Date.now() + timeLeft * 1000;
       intervalRef.current = setInterval(() => {
         const newTimeLeft = Math.round((targetTimeRef.current - Date.now()) / 1000);
-        if (newTimeLeft <= 0) {
+        if (newTimeLeft < 1) { // 0 이하일 때 확실히 처리하기 위해 < 1 사용
           clearInterval(intervalRef.current!);
           switchMode();
         } else {
@@ -93,19 +93,14 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
     }
   }, [focusDuration, breakDuration, mode]);
 
-  // ==================== FIX: handleStartPause 함수 수정 ====================
   const handleStartPause = () => {
-    // 가장 처음 'Start'를 누를 때만 실행됩니다.
     if (!isAudioInitialized) {
-      // 소리를 아주 잠깐(0초) 재생했다가 바로 멈춰서
-      // 브라우저로부터 앞으로 소리를 재생할 수 있는 권한을 얻습니다.
       audioRef.current?.play().catch(e => {}); 
       audioRef.current?.pause();              
       setIsAudioInitialized(true);
     }
     setIsActive(!isActive);
   };
-  // =====================================================================
   
   const handleSaveReset = () => {
     if (mode === TimerMode.Focus && timeLeft < focusDuration) {
