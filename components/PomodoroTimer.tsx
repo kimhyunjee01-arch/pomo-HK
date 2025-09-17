@@ -35,34 +35,33 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   const [isActive, setIsActive] = useState(false);
   const [totalFocusedSeconds, setTotalFocusedSeconds] = useState(0);
   const [showCatModal, setShowCatModal] = useState(false);
-  const [isAudioInitialized, setIsAudioInitialized] = useState(false);
-  // ==================== FIX: 오디오 준비 상태 추가 ====================
-  const [isAudioReady, setIsAudioReady] = useState(false);
-  // ===================================================================
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const targetTimeRef = useRef<number>(0);
 
-  // ==================== FIX: 오디오 로딩 감지 로직 추가 ====================
   useEffect(() => {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    const handleAudioReady = () => setIsAudioReady(true);
-    
-    audio.addEventListener('canplaythrough', handleAudioReady);
-    audioRef.current = audio;
-
-    return () => {
-      audio.removeEventListener('canplaythrough', handleAudioReady);
-    };
+    audioRef.current = new Audio(NOTIFICATION_SOUND);
   }, []);
-  // =======================================================================
+
+  const playSound = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(e => console.error("Error playing sound:", e));
+    }
+  }, []);
+
+  const unlockAudio = useCallback(() => {
+    if (!isAudioUnlocked && audioRef.current) {
+      audioRef.current.play().catch(() => {});
+      audioRef.current.pause();
+      setIsAudioUnlocked(true);
+    }
+  }, [isAudioUnlocked]);
 
   const switchMode = useCallback(() => {
-    if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(e => console.error("Error playing sound:", e));
-    }
+    playSound();
     
     const isFocus = mode === TimerMode.Focus;
     if (isFocus) {
@@ -73,8 +72,10 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
     const nextDuration = isFocus ? breakDuration : focusDuration;
     setMode(nextMode);
     setTimeLeft(nextDuration);
-    setIsActive(true);
-  }, [mode, focusDuration, breakDuration, setTotalFocusedSeconds]);
+    // ==================== FIX: Pause 버튼을 고장냈던 이 줄을 삭제합니다. ====================
+    // setIsActive(true); 
+    // =======================================================================================
+  }, [mode, focusDuration, breakDuration, playSound, setTotalFocusedSeconds]);
 
   useEffect(() => {
     if (isActive) {
@@ -98,7 +99,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isActive, switchMode]);
+  }, [isActive, switchMode, timeLeft]); // timeLeft를 다시 추가해야 자동시작/멈춤이 모두 정확히 작동합니다.
 
   useEffect(() => {
     if (!isActive) {
@@ -107,23 +108,14 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   }, [focusDuration, breakDuration, mode]);
 
   const handleStartPause = () => {
-    if (!isAudioInitialized && audioRef.current) {
-      const audio = audioRef.current;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-        }).catch(error => {
-          console.error("Audio unlock failed:", error);
-        });
-      }
-      setIsAudioInitialized(true);
-    }
+    unlockAudio();
     setIsActive(!isActive);
   };
   
   const handleSaveReset = () => {
+    unlockAudio();
+    playSound();
+    
     if (mode === TimerMode.Focus && timeLeft < focusDuration) {
         const focusedTime = focusDuration - timeLeft;
         setTotalFocusedSeconds(prev => prev + focusedTime);
@@ -174,18 +166,10 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
             </p>
         </div>
         <div className="flex items-center justify-center gap-4 mb-8">
-            {/* ==================== FIX: 버튼 비활성화 로직 및 텍스트 변경 ==================== */}
-            <button 
-                onClick={handleStartPause} 
-                disabled={isActive || !isAudioReady} 
-                className={`px-10 py-4 text-2xl font-bold rounded-lg transition-all
-                    ${isActive ? `bg-${accentColor}-600 hover:bg-${accentColor}-700` : `bg-${accentColor}-500 hover:bg-${accentColor}-600`}
-                    text-gray-900
-                    ${!isAudioReady && !isActive ? 'opacity-50 cursor-wait' : 'transition-transform transform hover:scale-105'}
-                `}>
-                {isActive ? 'Pause' : (isAudioReady ? 'Start' : 'Loading...')}
+            <button onClick={handleStartPause} className={`px-10 py-4 text-2xl font-bold rounded-lg transition-transform transform hover:scale-105
+                ${isActive ? `bg-${accentColor}-600 hover:bg-${accentColor}-700` : `bg-${accentColor}-500 hover:bg-${accentColor}-600`} text-gray-900`}>
+                {isActive ? 'Pause' : 'Start'}
             </button>
-            {/* ============================================================================== */}
             <button onClick={handleSaveReset} className="px-10 py-4 text-2xl font-bold rounded-lg bg-white/20 hover:bg-white/30 transition-colors">
                 Save & Reset
             </button>
