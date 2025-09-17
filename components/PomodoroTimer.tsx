@@ -56,15 +56,11 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
       setTotalFocusedSeconds(prev => prev + focusDuration);
     }
     
-    // 다음 모드로 전환하고, 그에 맞는 시간으로 timeLeft를 설정
     const nextMode = isFocus ? TimerMode.Break : TimerMode.Focus;
     const nextDuration = isFocus ? breakDuration : focusDuration;
     setMode(nextMode);
     setTimeLeft(nextDuration);
-
-    // ==================== FIX: 다음 타이머를 '활성' 상태로 명시적으로 설정 ====================
     setIsActive(true);
-    // =======================================================================================
   }, [mode, focusDuration, breakDuration, setTotalFocusedSeconds]);
 
   useEffect(() => {
@@ -78,7 +74,9 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
         } else {
           setTimeLeft(newTimeLeft);
         }
-      }, 250); // 간격을 250ms로 줄여 더 부드럽게 보이도록 개선
+      // ==================== FIX: 인터벌 간격을 1초로 되돌립니다. ====================
+      }, 1000);
+      // =======================================================================
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -89,7 +87,9 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isActive, switchMode, timeLeft]); // timeLeft를 다시 추가해야 자동 시작이 올바르게 작동합니다.
+  // ==================== FIX: 의존성 배열에서 timeLeft를 최종적으로 제거합니다. ====================
+  }, [isActive, switchMode]);
+  // =====================================================================================
 
   useEffect(() => {
     if (!isActive) {
@@ -97,7 +97,6 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
     }
   }, [focusDuration, breakDuration, mode, isActive]);
 
-  // ==================== FIX: 더 확실하게 오디오 권한을 얻는 로직 ====================
   const handleStartPause = () => {
     if (!isAudioInitialized && audioRef.current) {
       const audio = audioRef.current;
@@ -114,7 +113,6 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
     }
     setIsActive(!isActive);
   };
-  // ==============================================================================
   
   const handleSaveReset = () => {
     if (mode === TimerMode.Focus && timeLeft < focusDuration) {
