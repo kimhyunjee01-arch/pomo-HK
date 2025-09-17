@@ -47,34 +47,38 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
 
   const switchMode = useCallback(() => {
     if (audioRef.current) {
+        audioRef.current.currentTime = 0;
         audioRef.current.play().catch(e => console.error("Error playing sound:", e));
     }
     
-    if (mode === TimerMode.Focus) {
+    const isFocus = mode === TimerMode.Focus;
+    if (isFocus) {
       setTotalFocusedSeconds(prev => prev + focusDuration);
-      setMode(TimerMode.Break);
-      setTimeLeft(breakDuration);
-    } else {
-      setMode(TimerMode.Focus);
-      setTimeLeft(focusDuration);
     }
-    // ==================== FIX: 이 줄을 주석 처리하여 타이머가 멈추지 않게 합니다 ====================
-    // setIsActive(false); 
+    
+    // 다음 모드로 전환하고, 그에 맞는 시간으로 timeLeft를 설정
+    const nextMode = isFocus ? TimerMode.Break : TimerMode.Focus;
+    const nextDuration = isFocus ? breakDuration : focusDuration;
+    setMode(nextMode);
+    setTimeLeft(nextDuration);
+
+    // ==================== FIX: 다음 타이머를 '활성' 상태로 명시적으로 설정 ====================
+    setIsActive(true);
     // =======================================================================================
-  }, [mode, focusDuration, breakDuration, setTotalFocusedSeconds]); // 의존성 배열 업데이트
+  }, [mode, focusDuration, breakDuration, setTotalFocusedSeconds]);
 
   useEffect(() => {
     if (isActive) {
       targetTimeRef.current = Date.now() + timeLeft * 1000;
       intervalRef.current = setInterval(() => {
         const newTimeLeft = Math.round((targetTimeRef.current - Date.now()) / 1000);
-        if (newTimeLeft < 1) { // 0 이하일 때 확실히 처리하기 위해 < 1 사용
+        if (newTimeLeft < 1) {
           clearInterval(intervalRef.current!);
           switchMode();
         } else {
           setTimeLeft(newTimeLeft);
         }
-      }, 1000);
+      }, 250); // 간격을 250ms로 줄여 더 부드럽게 보이도록 개선
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -85,22 +89,32 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isActive, switchMode, timeLeft]);
+  }, [isActive, switchMode, timeLeft]); // timeLeft를 다시 추가해야 자동 시작이 올바르게 작동합니다.
 
   useEffect(() => {
     if (!isActive) {
       setTimeLeft(mode === TimerMode.Focus ? focusDuration : breakDuration);
     }
-  }, [focusDuration, breakDuration, mode]);
+  }, [focusDuration, breakDuration, mode, isActive]);
 
+  // ==================== FIX: 더 확실하게 오디오 권한을 얻는 로직 ====================
   const handleStartPause = () => {
-    if (!isAudioInitialized) {
-      audioRef.current?.play().catch(e => {}); 
-      audioRef.current?.pause();              
+    if (!isAudioInitialized && audioRef.current) {
+      const audio = audioRef.current;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        }).catch(error => {
+          console.error("Audio unlock failed:", error);
+        });
+      }
       setIsAudioInitialized(true);
     }
     setIsActive(!isActive);
   };
+  // ==============================================================================
   
   const handleSaveReset = () => {
     if (mode === TimerMode.Focus && timeLeft < focusDuration) {
