@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-// 임시로 TimerMode를 정의합니다. 실제 types.ts 파일이 있다면 그 파일을 사용하세요.
-export enum TimerMode {
-  Focus = 'FOCUS',
-  Break = 'BREAK',
-}
+
+// constants 파일에서 값들을 가져온다고 가정합니다.
 import {
   FOCUS_DURATIONS,
   BREAK_DURATIONS,
@@ -13,11 +10,14 @@ import {
 } from '../constants';
 import CatModal from './CatModal';
 
-interface PomodoroTimerProps {
-  goal: string;
-}
+// enum을 일반 자바스크립트 객체로 변경
+const TimerMode = {
+  Focus: 'FOCUS',
+  Break: 'BREAK',
+};
 
-const TimerDisplay: React.FC<{ seconds: number }> = ({ seconds }) => {
+// React.FC 타입을 제거하고 일반 함수로 변경
+const TimerDisplay = ({ seconds }) => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return (
@@ -27,19 +27,20 @@ const TimerDisplay: React.FC<{ seconds: number }> = ({ seconds }) => {
   );
 };
 
-const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
+// React.FC 및 interface 타입을 모두 제거
+const PomodoroTimer = ({ goal }) => {
   const [focusDuration, setFocusDuration] = useState(DEFAULT_FOCUS_DURATION * 60);
   const [breakDuration, setBreakDuration] = useState(DEFAULT_BREAK_DURATION * 60);
-  const [mode, setMode] = useState<TimerMode>(TimerMode.Focus);
+  const [mode, setMode] = useState(TimerMode.Focus); // 타입 제거
   const [timeLeft, setTimeLeft] = useState(focusDuration);
   const [isActive, setIsActive] = useState(false);
   const [totalFocusedSeconds, setTotalFocusedSeconds] = useState(0);
   const [showCatModal, setShowCatModal] = useState(false);
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const targetTimeRef = useRef<number>(0);
+  const audioRef = useRef(null); // 타입 제거
+  const intervalRef = useRef(null); // 타입 제거
+  const targetTimeRef = useRef(0);
 
   useEffect(() => {
     audioRef.current = new Audio(NOTIFICATION_SOUND);
@@ -62,20 +63,15 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
 
   const switchMode = useCallback(() => {
     playSound();
-    
     const isFocus = mode === TimerMode.Focus;
     if (isFocus) {
       setTotalFocusedSeconds(prev => prev + focusDuration);
     }
-    
     const nextMode = isFocus ? TimerMode.Break : TimerMode.Focus;
     const nextDuration = isFocus ? breakDuration : focusDuration;
     setMode(nextMode);
     setTimeLeft(nextDuration);
-    // ==================== FIX: Pause 버튼을 고장냈던 이 줄을 삭제합니다. ====================
-    // setIsActive(true); 
-    // =======================================================================================
-  }, [mode, focusDuration, breakDuration, playSound, setTotalFocusedSeconds]);
+  }, [mode, focusDuration, breakDuration, playSound]);
 
   useEffect(() => {
     if (isActive) {
@@ -83,29 +79,34 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
       intervalRef.current = setInterval(() => {
         const newTimeLeft = Math.round((targetTimeRef.current - Date.now()) / 1000);
         if (newTimeLeft < 1) {
-          clearInterval(intervalRef.current!);
           switchMode();
         } else {
           setTimeLeft(newTimeLeft);
         }
       }, 1000);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
     }
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isActive, switchMode, timeLeft]); // timeLeft를 다시 추가해야 자동시작/멈춤이 모두 정확히 작동합니다.
+  }, [isActive, switchMode, timeLeft]);
 
+  // ===== ★★★ PAUSE 버그 최종 수정 ★★★ =====
+  // useEffect의 의존성 배열에서 [mode, isActive]를 제거했습니다.
+  // 이제 이 로직은 오직 '시간 설정 버튼'을 눌렀을 때만 작동하며, 'Pause' 버튼에는 전혀 영향을 주지 않습니다.
   useEffect(() => {
-    if (!isActive) {
-      setTimeLeft(mode === TimerMode.Focus ? focusDuration : breakDuration);
+    if (mode === TimerMode.Focus && !isActive) {
+      setTimeLeft(focusDuration);
     }
-  }, [focusDuration, breakDuration, mode]);
+  }, [focusDuration]);
+  
+  useEffect(() => {
+    if (mode === TimerMode.Break && !isActive) {
+      setTimeLeft(breakDuration);
+    }
+  }, [breakDuration]);
+  // ==========================================
 
   const handleStartPause = () => {
     unlockAudio();
@@ -115,8 +116,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   const handleSaveReset = () => {
     unlockAudio();
     playSound();
-    
-    if (mode === TimerMode.Focus && timeLeft < focusDuration) {
+    if (mode === TimerMode.Focus && timeLeft < focusDuration && isActive) {
         const focusedTime = focusDuration - timeLeft;
         setTotalFocusedSeconds(prev => prev + focusedTime);
     }
@@ -126,26 +126,34 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   };
   
   const totalMinutesFocused = Math.floor(totalFocusedSeconds / 60);
+  
   const themeClasses = mode === TimerMode.Focus ? 'bg-gray-900 text-white' : 'bg-blue-900 text-white';
-  const accentColor = mode === TimerMode.Focus ? 'cyan' : 'yellow';
-
+  const totalFocusColorClass = mode === TimerMode.Focus ? 'text-cyan-300' : 'text-yellow-300';
+  const startPauseButtonClass = mode === TimerMode.Focus
+    ? (isActive ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-cyan-500 hover:bg-cyan-600')
+    : (isActive ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600');
+  const configButtonSelectedClass = mode === TimerMode.Focus
+    ? 'bg-cyan-500 text-gray-900'
+    : 'bg-yellow-500 text-gray-900';
+    
   const renderConfigButton = (
-    valueInMinutes: number,
-    currentValueInSeconds: number,
-    setter: (valInSeconds: number) => void,
-    unit: string
+    valueInMinutes,
+    currentValueInSeconds,
+    setter,
+    unit
   ) => {
     const valueInSeconds = valueInMinutes * 60;
     const isSelected = valueInSeconds === currentValueInSeconds;
     return (
       <button
         key={`${unit}-${valueInMinutes}`}
+        type="button"
         onClick={() => setter(valueInSeconds)}
         disabled={isActive}
         className={`px-4 py-2 rounded-lg transition-all text-sm font-medium
-                  ${isSelected ? `bg-${accentColor}-500 text-gray-900` : `bg-white/10 hover:bg-white/20`}
-                  ${isActive ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
+          ${isSelected ? configButtonSelectedClass : `bg-white/10 hover:bg-white/20`}
+          ${isActive ? 'opacity-50 cursor-not-allowed' : ''}
+        `}
       >
         {valueInMinutes} {unit}
       </button>
@@ -155,7 +163,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   return (
     <main className={`flex flex-col items-center justify-center min-h-screen p-4 transition-colors duration-1000 ${themeClasses}`}>
       <div className="absolute top-4 right-4 text-lg bg-white/10 px-4 py-2 rounded-full">
-        Total Focus Today: <span className={`font-bold text-${accentColor}-300`}>{totalMinutesFocused} min</span>
+        Total Focus Today: <span className={`font-bold ${totalFocusColorClass}`}>{totalMinutesFocused} min</span>
       </div>
       <div className="text-center w-full max-w-2xl flex flex-col items-center">
         <h1 className="text-2xl md:text-3xl font-light text-gray-300 mb-2 truncate px-4">{goal}</h1>
@@ -166,11 +174,18 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
             </p>
         </div>
         <div className="flex items-center justify-center gap-4 mb-8">
-            <button onClick={handleStartPause} className={`px-10 py-4 text-2xl font-bold rounded-lg transition-transform transform hover:scale-105
-                ${isActive ? `bg-${accentColor}-600 hover:bg-${accentColor}-700` : `bg-${accentColor}-500 hover:bg-${accentColor}-600`} text-gray-900`}>
+            <button
+              type="button"
+              onClick={handleStartPause}
+              className={`px-10 py-4 text-2xl font-bold rounded-lg transition-transform transform hover:scale-105 text-gray-900 ${startPauseButtonClass}`}
+            >
                 {isActive ? 'Pause' : 'Start'}
             </button>
-            <button onClick={handleSaveReset} className="px-10 py-4 text-2xl font-bold rounded-lg bg-white/20 hover:bg-white/30 transition-colors">
+            <button
+              type="button"
+              onClick={handleSaveReset}
+              className="px-10 py-4 text-2xl font-bold rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+            >
                 Save & Reset
             </button>
         </div>
@@ -178,19 +193,23 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
             <div className="flex items-center gap-2">
                 <span className="font-semibold w-20">Focus:</span>
                 <div className="flex gap-2">
-                {FOCUS_DURATIONS.map(dur => renderConfigButton(dur, focusDuration, setFocusDuration, 'min'))}
+                  {FOCUS_DURATIONS.map(dur => renderConfigButton(dur, focusDuration, setFocusDuration, 'min'))}
                 </div>
             </div>
             <div className="flex items-center gap-2">
                 <span className="font-semibold w-20">Break:</span>
                 <div className="flex gap-2">
-                {BREAK_DURATIONS.map(dur => renderConfigButton(dur, breakDuration, setBreakDuration, 'min'))}
+                  {BREAK_DURATIONS.map(dur => renderConfigButton(dur, breakDuration, setBreakDuration, 'min'))}
                 </div>
             </div>
         </div>
       </div>
       <div className="absolute bottom-5">
-        <button onClick={() => setShowCatModal(true)} className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-full shadow-lg transition-transform transform hover:scale-105">
+        <button
+          type="button"
+          onClick={() => setShowCatModal(true)}
+          className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-full shadow-lg transition-transform transform hover:scale-105"
+        >
           I can't focus
         </button>
       </div>
