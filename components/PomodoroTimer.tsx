@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 // constants 파일에서 값들을 가져온다고 가정합니다.
+// 이 파일이 없다면, 아래 값들을 직접 코드에 입력해야 합니다.
 import {
   FOCUS_DURATIONS,
   BREAK_DURATIONS,
@@ -16,7 +17,7 @@ const TimerMode = {
   Break: 'BREAK',
 };
 
-// React.FC 타입을 제거하고 일반 함수로 변경
+// TimerDisplay 컴포넌트
 const TimerDisplay = ({ seconds }) => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -27,20 +28,36 @@ const TimerDisplay = ({ seconds }) => {
   );
 };
 
-// React.FC 및 interface 타입을 모두 제거
+// PomodoroTimer 메인 컴포넌트
 const PomodoroTimer = ({ goal }) => {
   const [focusDuration, setFocusDuration] = useState(DEFAULT_FOCUS_DURATION * 60);
   const [breakDuration, setBreakDuration] = useState(DEFAULT_BREAK_DURATION * 60);
-  const [mode, setMode] = useState(TimerMode.Focus); // 타입 제거
+  const [mode, setMode] = useState(TimerMode.Focus);
   const [timeLeft, setTimeLeft] = useState(focusDuration);
   const [isActive, setIsActive] = useState(false);
-  const [totalFocusedSeconds, setTotalFocusedSeconds] = useState(0);
   const [showCatModal, setShowCatModal] = useState(false);
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
 
-  const audioRef = useRef(null); // 타입 제거
-  const intervalRef = useRef(null); // 타입 제거
+  // 1. 시간 저장 기능: 페이지 로드 시 localStorage에서 데이터 불러오기
+  const [totalFocusedSeconds, setTotalFocusedSeconds] = useState(() => {
+    const saved = localStorage.getItem('pomodoro-total-seconds');
+    const today = new Date().toLocaleDateString();
+    const savedDate = localStorage.getItem('pomodoro-date');
+    if (saved && today === savedDate) {
+      return JSON.parse(saved);
+    }
+    return 0;
+  });
+
+  const audioRef = useRef(null);
+  const intervalRef = useRef(null);
   const targetTimeRef = useRef(0);
+
+  // 2. 시간 저장 기능: 시간이 바뀔 때마다 localStorage에 자동 저장하기
+  useEffect(() => {
+    localStorage.setItem('pomodoro-total-seconds', JSON.stringify(totalFocusedSeconds));
+    localStorage.setItem('pomodoro-date', new Date().toLocaleDateString());
+  }, [totalFocusedSeconds]);
 
   useEffect(() => {
     audioRef.current = new Audio(NOTIFICATION_SOUND);
@@ -92,8 +109,7 @@ const PomodoroTimer = ({ goal }) => {
     };
   }, [isActive, switchMode, timeLeft]);
 
-  // ===== ★★★ PAUSE 버그 최종 수정 ★★★ =====
-  // useEffect의 의존성 배열에서 [mode, isActive]를 제거했습니다.
+  // ★★★ PAUSE 버그 최종 수정된 부분 ★★★
   // 이제 이 로직은 오직 '시간 설정 버튼'을 눌렀을 때만 작동하며, 'Pause' 버튼에는 전혀 영향을 주지 않습니다.
   useEffect(() => {
     if (mode === TimerMode.Focus && !isActive) {
