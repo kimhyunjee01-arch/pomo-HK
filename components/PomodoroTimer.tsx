@@ -74,9 +74,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
         } else {
           setTimeLeft(newTimeLeft);
         }
-      // ==================== FIX: 인터벌 간격을 1초로 되돌립니다. ====================
       }, 1000);
-      // =======================================================================
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -87,15 +85,15 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
         clearInterval(intervalRef.current);
       }
     };
-  // ==================== FIX: 의존성 배열에서 timeLeft를 최종적으로 제거합니다. ====================
   }, [isActive, switchMode]);
-  // =====================================================================================
 
   useEffect(() => {
     if (!isActive) {
       setTimeLeft(mode === TimerMode.Focus ? focusDuration : breakDuration);
     }
-  }, [focusDuration, breakDuration, mode, isActive]);
+  // ==================== FIX: 의존성 배열에서 isActive를 최종적으로 제거합니다. ====================
+  }, [focusDuration, breakDuration, mode]);
+  // =====================================================================================
 
   const handleStartPause = () => {
     if (!isAudioInitialized && audioRef.current) {
