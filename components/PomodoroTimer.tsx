@@ -36,14 +36,27 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
   const [totalFocusedSeconds, setTotalFocusedSeconds] = useState(0);
   const [showCatModal, setShowCatModal] = useState(false);
   const [isAudioInitialized, setIsAudioInitialized] = useState(false);
+  // ==================== FIX: 오디오 준비 상태 추가 ====================
+  const [isAudioReady, setIsAudioReady] = useState(false);
+  // ===================================================================
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const targetTimeRef = useRef<number>(0);
 
+  // ==================== FIX: 오디오 로딩 감지 로직 추가 ====================
   useEffect(() => {
-    audioRef.current = new Audio(NOTIFICATION_SOUND);
+    const audio = new Audio(NOTIFICATION_SOUND);
+    const handleAudioReady = () => setIsAudioReady(true);
+    
+    audio.addEventListener('canplaythrough', handleAudioReady);
+    audioRef.current = audio;
+
+    return () => {
+      audio.removeEventListener('canplaythrough', handleAudioReady);
+    };
   }, []);
+  // =======================================================================
 
   const switchMode = useCallback(() => {
     if (audioRef.current) {
@@ -91,9 +104,7 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
     if (!isActive) {
       setTimeLeft(mode === TimerMode.Focus ? focusDuration : breakDuration);
     }
-  // ==================== FIX: 의존성 배열에서 isActive를 최종적으로 제거합니다. ====================
   }, [focusDuration, breakDuration, mode]);
-  // =====================================================================================
 
   const handleStartPause = () => {
     if (!isAudioInitialized && audioRef.current) {
@@ -163,10 +174,18 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ goal }) => {
             </p>
         </div>
         <div className="flex items-center justify-center gap-4 mb-8">
-            <button onClick={handleStartPause} className={`px-10 py-4 text-2xl font-bold rounded-lg transition-transform transform hover:scale-105
-                ${isActive ? `bg-${accentColor}-600 hover:bg-${accentColor}-700` : `bg-${accentColor}-500 hover:bg-${accentColor}-600`} text-gray-900`}>
-                {isActive ? 'Pause' : 'Start'}
+            {/* ==================== FIX: 버튼 비활성화 로직 및 텍스트 변경 ==================== */}
+            <button 
+                onClick={handleStartPause} 
+                disabled={isActive || !isAudioReady} 
+                className={`px-10 py-4 text-2xl font-bold rounded-lg transition-all
+                    ${isActive ? `bg-${accentColor}-600 hover:bg-${accentColor}-700` : `bg-${accentColor}-500 hover:bg-${accentColor}-600`}
+                    text-gray-900
+                    ${!isAudioReady && !isActive ? 'opacity-50 cursor-wait' : 'transition-transform transform hover:scale-105'}
+                `}>
+                {isActive ? 'Pause' : (isAudioReady ? 'Start' : 'Loading...')}
             </button>
+            {/* ============================================================================== */}
             <button onClick={handleSaveReset} className="px-10 py-4 text-2xl font-bold rounded-lg bg-white/20 hover:bg-white/30 transition-colors">
                 Save & Reset
             </button>
